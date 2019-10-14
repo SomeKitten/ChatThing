@@ -61,12 +61,8 @@ except FileNotFoundError:
     pass
 
 
-def threaded_client(conn, number):
+def send_log(conn):
     global log
-    names.append("Anonymous{}".format(number))
-    print("Sending default name...")
-    conn.send(str.encode("2{}".format(names[number])))
-    conn.recv(2048)
     print("Sending chat log...")
     for line in log.split("\n"):
         if line.strip() != "":
@@ -74,9 +70,94 @@ def threaded_client(conn, number):
             conn.recv(2048)
     print("Chat log sent!")
 
-    conn.send(str.encode("3"))
 
-    reply = ""
+def change_name(number, name):
+    if not os.path.exists("cache/{}".format(name)):
+        names[number] = name
+        print("Changing name")
+
+
+def send_msg(name, msg):
+    global log
+    msg = "{}|{}: {}".format(time.time(), name, msg)
+    send_text(msg)
+
+
+def send_text(msg):
+    global log
+    log = "{}\n{}".format(log, msg)
+    with open("logs/server.log", "wb+") as f:
+        f.write(str.encode(log))
+    msg = "0{}".format(msg)
+    print("Sending: '{}'".format(msg))
+    for c in conns:
+        c.sendall(str.encode(msg))
+
+
+def login_register(password, username, number):
+    try:
+        if os.path.exists("cache/{}".format(username)):
+            reply = crypto.try_login(password, username, ips[number])
+            if reply is None:
+                return
+        else:
+            crypto.register(password, username)
+            reply = crypto.try_login(password, username, ips[number])
+        names[number] = username
+        conn = conns[number]
+
+        reply = "1{}".format(reply)
+        print("Sending: '{}'".format(reply))
+        conn.sendall(str.encode(reply))
+
+        conn.recv(2048)
+
+        reply = "2{}".format(username)
+        print("Sending: '{}'".format(reply))
+        conn.sendall(str.encode(reply))
+    except AttributeError:
+        pass
+
+
+def token_login(token, number):
+    try:
+        if os.path.exists("local_cache/{}".format(ips[number])):
+            try:
+                credentials = crypto.token_login(ips[number], token).decode()
+            except ValueError:
+                os.remove("local_cache/{}".format(ips[number]))
+                return
+            credentials = credentials.split("\n")
+
+            cache = crypto.try_login(credentials[0], credentials[1], ips[number])
+            if cache:
+                names[number] = credentials[1]
+                conn = conns[number]
+
+                reply = "1{}".format(cache)
+                print("Sending: '{}'".format(reply))
+                conn.sendall(str.encode(reply))
+
+                conn.recv(2048)
+
+                reply = "2{}".format(names[number])
+                print("Sending: '{}'".format(reply))
+                conn.sendall(str.encode(reply))
+    except AttributeError:
+        pass
+
+
+def threaded_client(conn, number):
+    global log
+    names.append("Anonymous{}".format(number))
+    print("Sending default name...")
+    conn.send(str.encode("2{}".format(names[number])))  # change local username
+    conn.recv(2048)
+
+    send_log(conn)
+
+    conn.send(str.encode("3"))  # prompt cache send
+
     while True:
         try:
             data = conn.recv(2048)
@@ -90,82 +171,25 @@ def threaded_client(conn, number):
 
             if reply.startswith("0"):
                 # name change
-                if not os.path.exists("cache/{}".format(reply[1:].strip())):
-                    names[number] = reply[1:].strip()
-                    print("Changing name")
-                continue
+                name = reply[1:].strip()
+                change_name(number, name)
             elif reply.startswith("1"):
                 # generic text
-                reply = reply[1:]
-                reply = "0{}|{}: {}".format(time.time(), names[number], reply)
-                log = "{}{}".format(log, reply[1:])
-                with open("logs/server.log", "wb+") as f:
-                    f.write(str.encode(log))
-                print("Sending: '{}'".format(reply))
-                for c in conns:
-                    c.sendall(str.encode(reply))
+                msg = reply[1:].strip()
+                send_msg(names[number], msg)
             elif reply.startswith("2"):
                 # log in
                 tokens = reply[1:].split("\n")
-                try:
-                    if os.path.exists("cache/{}".format(tokens[1])):
-                        reply = crypto.try_login(tokens[0], tokens[1], ips[number])
-                        if reply is None:
-                            continue
-                    else:
-                        crypto.register(tokens[0], tokens[1])
-                        reply = crypto.try_login(tokens[0], tokens[1], ips[number])
-                    reply = "1{}".format(reply)
-                    names[number] = tokens[1]
-                    print("Sending: '{}'".format(reply))
-                    for c in conns:
-                        c.sendall(str.encode(reply))
-
-                    conn.recv(2048)
-
-                    reply = "2{}".format(names[number])
-                    print("Sending: '{}'".format(reply))
-                    for c in conns:
-                        c.sendall(str.encode(reply))
-                except AttributeError:
-                    continue
+                login_register(tokens[0], tokens[1], number)
             elif reply.startswith("3"):
                 print("Token login!")
-                try:
-                    if os.path.exists("local_cache/{}".format(ips[number])):
-                        try:
-                            credentials = crypto.token_login(ips[number], reply[1:]).decode()
-                        except ValueError:
-                            os.remove("local_cache/{}".format(ips[number]))
-                            continue
-                        credentials = credentials.split("\n")
-
-                        cache = crypto.try_login(credentials[0], credentials[1], ips[number])
-                        if cache:
-                            names[number] = credentials[1]
-                            reply = "1{}".format(cache)
-                            print("Sending: '{}'".format(reply))
-                            for c in conns:
-                                c.sendall(str.encode(reply))
-
-                            conn.recv(2048)
-
-                            reply = "2{}".format(names[number])
-                            print("Sending: '{}'".format(reply))
-                            for c in conns:
-                                c.sendall(str.encode(reply))
-                except AttributeError:
-                    pass
-                continue
-
+                token_login(reply[1:], number)
             if not data:
                 print("Disconnected")
                 break
             else:
                 print("Sending: X")
-
-            for c in conns:
-                c.sendall(str.encode("X"))
+                conn.sendall(str.encode("X"))
         except ConnectionResetError:
             break
     print("{} has left the chat...".format(names[number]))
