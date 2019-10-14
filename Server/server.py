@@ -99,7 +99,7 @@ def login_register(password, username, number):
     try:
         if os.path.exists("cache/{}".format(username)):
             reply = crypto.try_login(password, username, ips[number])
-            if reply is None:
+            if not reply:
                 return
         else:
             crypto.register(password, username)
@@ -177,7 +177,7 @@ def get_data(conn, number):
             elif reply.startswith("3"):
                 print("Token login!")
                 token_login(reply[1:], number)
-            if not data:
+            elif not data:
                 print("Disconnected")
                 return "break"
             else:

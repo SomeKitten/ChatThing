@@ -19,7 +19,7 @@ class Application(tk.Frame):
         self.pack(expand=1, fill='both')
         self.master.geometry('500x500')
         self.username = ""
-        self.version = "0.0.5"
+        self.version = "0.0.6"
         self.create_widgets()
 
     def _msg_return(self, event):
