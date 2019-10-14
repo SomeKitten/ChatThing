@@ -225,7 +225,7 @@ while True:
     if len(conns) > 0:
         for i in range(0, len(conns) + 1):
             connections = i
-            if i == len(conns) + 1:
+            if i >= len(conns):
                 conns.append(0)
                 ips.append(0)
                 names.append(0)
