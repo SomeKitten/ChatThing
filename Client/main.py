@@ -1,10 +1,12 @@
 import os
+import time
 import tkinter as tk
-import network
 from _thread import *
-import settings
-import login
+
 import crypto
+import login
+import network
+import settings
 import strconvert
 
 fontsize = 12
@@ -17,40 +19,31 @@ class Application(tk.Frame):
         self.pack(expand=1, fill='both')
         self.master.geometry('500x500')
         self.username = ""
+        self.version = "0.0.5"
         self.create_widgets()
 
+    def _msg_return(self, event):
+        self.send_msg()
+        return "break"
+
+    def _on_mousewheel(self, event):
+        self.chat_container.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
     def create_widgets(self):
+        # create the menu where all the buttons are at the bottom
+        self.create_widgets_menu()
+        # create the chatbox where the user types their messages
+        self.create_widgets_chatbox()
 
-        self.menu = tk.Frame(self)
-        self.menu.pack(side="bottom")
+        self.chat_text = tk.StringVar()
 
-        self.quit = tk.Button(self.menu, text="QUIT", fg="red",
-                              command=self.master.destroy)
-        self.quit.pack(side="left")
+        # create the chat where all the messages are displayed
+        self.create_widgets_chat()
 
-        self.settings = tk.Button(self.menu, text="SETTINGS", fg="black",
-                              command=self.settings_event)
-        self.settings.pack(side="left")
+        # display version
+        self.chat_text.set("--- BruhChat v{} ---".format(self.version))
 
-        self.login = tk.Button(self.menu, text="LOGIN", fg="green",
-                              command=self.login_event)
-        self.login.pack(side="left")
-
-        # divider
-        # divider
-        # divider
-        # divider
-
-        self.chatbox = tk.Text(self, font=("Helvetica", fontsize))
-        self.chatbox.pack(side="bottom", fill='x')
-        self.chatbox["height"] = 4
-        self.chatbox.bind("<Return>", self.msg_return)
-
-        # divider
-        # divider
-        # divider
-        # divider
-
+    def create_widgets_chat(self):
         self.chat_container = tk.Canvas(self)
         self.scrollbar = tk.Scrollbar(self.chat_container, orient='vertical')
         self.chat_container.config(yscrollcommand=self.scrollbar.set)
@@ -62,61 +55,66 @@ class Application(tk.Frame):
         self.chat_container.pack(side="bottom", fill='both', expand=True)
 
         self.chat_container.create_window(0, 0, window=self.chat_frame, anchor="nw")
-
-        self.chat_text = tk.StringVar()
-        self.chatmessages = tk.Label(self.chat_frame, font=("Helvetica", fontsize), textvariable=self.chat_text, justify="left", anchor='sw')
+        self.chatmessages = tk.Label(self.chat_frame, font=("Helvetica", fontsize), textvariable=self.chat_text,
+                                     justify="left", anchor='sw')
         self.chatmessages.pack(side="bottom", fill='both')
 
         self.chat_container.bind_all("<MouseWheel>", self._on_mousewheel)
 
-        # divider
-        # divider
-        # divider
-        # divider
+    def create_widgets_chatbox(self):
+        self.chatbox = tk.Text(self, font=("Helvetica", fontsize))
+        self.chatbox.pack(side="bottom", fill='x')
+        self.chatbox["height"] = 4
+        self.chatbox.bind("<Return>", self._msg_return)
 
-        self.chat_text.set("--- BruhChat v0.0.5 ---")
+    def create_widgets_menu(self):
+        self.menu = tk.Frame(self)  # container for buttons at bottom of window
+        self.menu.pack(side="bottom")
 
-    def _on_mousewheel(self, event):
-        self.chat_container.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        self.quit = tk.Button(self.menu, text="QUIT", fg="red",
+                              command=self.master.destroy)
+        self.quit.pack(side="left")
 
-    def send_msg(self):
-        msg = self.chatbox.get(1.0, "end")
-        msg = strconvert.add_emotes(msg).encode('utf-16', 'surrogatepass').decode('utf-16')
-        if msg.strip() != "":
-            n.send("1{}".format(msg))
-            self.chatbox.delete(1.0, "end")
+        self.settings = tk.Button(self.menu, text="SETTINGS", fg="black",
+                                  command=self.settings_event)
+        self.settings.pack(side="left")
 
-    def update_chat(self):
+        self.login = tk.Button(self.menu, text="LOGIN", fg="green",
+                               command=self.login_event)
+        self.login.pack(side="left")
+
+    def get_cache(self, data):
+        print("Updating cache...")
+        crypto.write_b64("cache/login", data.encode())
+        n.client.send(str.encode("X"))
+
+    def get_data(self):
         while True:
-            msg = n.update_chat()
+            data = n.get_data()
 
-            if msg.startswith("2"):
-                app.username = msg[1:]
-                continue
-            if msg.startswith("3"):
-                try:
-                    login_cache = crypto.read_b64("cache/login")
-                    n.send("3{}".format(login_cache))
-                except FileNotFoundError:
-                    pass
+            if data.startswith("0"):
+                data = data[1:]
+                self.get_messages(data)
+            elif data.startswith("1"):
+                data = data[1:]
+                self.get_cache(data)
+            elif data.startswith("2"):
+                data = data[1:]
+                self.get_username(data)
+            elif data.startswith("3"):
+                self.send_cache()
 
-            if msg is not None and msg.startswith("0"):
-                msg = msg[1:].strip()
-                global new_messages
-                new_messages = "{}\n{}".format(new_messages, msg)
+    def get_messages(self, data):
+        datatime = data.split("|")[0]
+        datatime = time.strftime('%H:%M:%S', time.localtime(float(datatime)))
+        data = "0{}{}".format("[{}]".format(datatime).ljust(12), data.split("|")[1])[1:].strip()
+        n.client.send(str.encode("X"))
+        global new_messages
+        new_messages = "{}\n{}".format(new_messages, data)
 
-    def msg_return(self, event):
-        self.send_msg()
-        return "break"
-
-    def settings_event(self):
-        global options
-        if options is None or not tk.Toplevel.winfo_exists(options):
-            options = tk.Toplevel()
-            settings.run_settings(options, self.rename, self.username)
-        else:
-            options.destroy()
-            options = None
+    def get_username(self, data):
+        app.username = data
+        n.client.send(str.encode("X"))
 
     def login_event(self):
         global login_window
@@ -131,8 +129,41 @@ class Application(tk.Frame):
         self.username = new_name
         n.send("0{}".format(self.username))
 
+    def send_cache(self):
+        try:
+            login_cache = crypto.read_b64("cache/login")
+            n.send("3{}".format(login_cache))
+        except FileNotFoundError:
+            pass
+
     def send_login(self, username, password):
         n.send("2{}\n{}".format(username, password))
+
+    def send_msg(self):
+        msg = self.chatbox.get(1.0, "end")
+        msg = strconvert.add_emotes(msg).encode('utf-16', 'surrogatepass').decode('utf-16')
+        if msg.strip() != "":
+            n.send("1{}".format(msg))
+            self.chatbox.delete(1.0, "end")
+
+    def settings_event(self):
+        global options
+        if options is None or not tk.Toplevel.winfo_exists(options):
+            options = tk.Toplevel()
+            settings.run_settings(options, self.rename, self.username)
+        else:
+            options.destroy()
+            options = None
+
+    def update_chat(self):
+        global new_messages
+        print("Updating chat with: '{}'".format(new_messages))
+        new_messages = strconvert.with_surrogates(new_messages)
+        self.chat_text.set("{}\n{}".format(self.chat_text.get(), new_messages).strip())
+        new_messages = ""
+        self.update()
+        self.chat_container.config(scrollregion=self.chat_container.bbox('all'))
+        self.chat_container.yview_moveto(1)
 
 
 try:
@@ -160,16 +191,10 @@ app = Application(master=root)
 
 app.username = ""
 
-start_new_thread(app.update_chat, ())
+start_new_thread(app.get_data, ())
 while True:
-    if new_messages.strip() != "":
-        new_messages = new_messages.strip()
-        print("Updating chat with: '{}'".format(new_messages))
-        new_messages = strconvert.with_surrogates(new_messages)
-        app.chat_text.set("{}\n{}".format(app.chat_text.get(), new_messages).strip())
-        new_messages = ""
-        app.update()
-        app.chat_container.config(scrollregion=app.chat_container.bbox('all'))
-        app.chat_container.yview_moveto(1)
+    new_messages = new_messages.strip()
+    if new_messages != "":
+        app.update_chat()
     app.update_idletasks()
     app.update()
