@@ -86,7 +86,6 @@ class Application(tk.Frame):
     def get_cache(self, data):
         print("Updating cache...")
         crypto.write_b64("cache/login", data.encode())
-        n.client.send(str.encode("X"))
 
     def get_data(self):
         while True:
@@ -103,18 +102,17 @@ class Application(tk.Frame):
                 self.get_username(data)
             elif data.startswith("3"):
                 self.send_cache()
+            n.client.send(str.encode("X"))
 
     def get_messages(self, data):
         datatime = data.split("|")[0]
         datatime = time.strftime('%H:%M:%S', time.localtime(float(datatime)))
         data = "0{}{}".format("[{}]".format(datatime).ljust(12), data.split("|")[1])[1:].strip()
-        n.client.send(str.encode("X"))
         global new_messages
         new_messages = "{}\n{}".format(new_messages, data)
 
     def get_username(self, data):
         app.username = data
-        n.client.send(str.encode("X"))
 
     def login_event(self):
         global login_window

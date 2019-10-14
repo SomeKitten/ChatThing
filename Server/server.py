@@ -2,7 +2,7 @@ import os
 import socket
 import time
 from _thread import *
-import sys
+
 import crypto
 
 try:
@@ -91,7 +91,8 @@ def send_text(msg):
     msg = "0{}".format(msg)
     print("Sending: '{}'".format(msg))
     for c in conns:
-        c.sendall(str.encode(msg))
+        if c is not None:
+            c.sendall(str.encode(msg))
 
 
 def login_register(password, username, number):
@@ -104,6 +105,7 @@ def login_register(password, username, number):
             crypto.register(password, username)
             reply = crypto.try_login(password, username, ips[number])
         names[number] = username
+        print("Index: {}".format(number))
         conn = conns[number]
 
         reply = "1{}".format(reply)
@@ -147,18 +149,9 @@ def token_login(token, number):
         pass
 
 
-def threaded_client(conn, number):
-    global log
-    names.append("Anonymous{}".format(number))
-    print("Sending default name...")
-    conn.send(str.encode("2{}".format(names[number])))  # change local username
-    conn.recv(2048)
-
-    send_log(conn)
-
-    conn.send(str.encode("3"))  # prompt cache send
-
-    while True:
+def get_data(conn, number):
+    reply = "X"
+    while reply == "X":
         try:
             data = conn.recv(2048)
             reply = data.decode("utf-8")
@@ -186,20 +179,41 @@ def threaded_client(conn, number):
                 token_login(reply[1:], number)
             if not data:
                 print("Disconnected")
-                break
+                return "break"
             else:
                 print("Sending: X")
                 conn.sendall(str.encode("X"))
         except ConnectionResetError:
+            return "break"
+        return
+
+
+def threaded_client(conn, number):
+    global log
+    conn.send(str.encode("2{}".format(names[number])))  # change local username
+    conn.recv(2048)
+
+    send_log(conn)
+
+    conn.send(str.encode("3"))  # prompt cache send
+
+    get_data(conn, number)
+
+    joinmsg = "{}|{} has joined the chat...".format(time.time(), names[number])
+    send_text(joinmsg)
+
+    while True:
+        returned = get_data(conn, number)
+        if returned == "break":
             break
-    print("{} has left the chat...".format(names[number]))
-    conns.remove(conn)
+
+    leavemsg = "{}|{} has left the chat...".format(time.time(), names[number])
+
+    conns[number] = None
+
+    print("Disconnecting {}".format(number))
     conn.close()
-    for c in conns:
-        try:
-            c.sendall(str.encode("{} has left the chat...".format(names[number])))
-        except WindowsError:
-            pass
+    send_text(leavemsg)
 
 
 connections = 0
@@ -209,8 +223,28 @@ ips = []
 
 while True:
     connection, addr = s.accept()
-    print("Connected to:{}".format(addr))
-    conns.append(connection)
-    ips.append(addr[0])
-    start_new_thread(threaded_client, (connection, connections, ))
+
+    if len(conns) > 0:
+        for i in range(0, len(conns) + 1):
+            connections = i
+            if i == len(conns) + 1:
+                conns.append(0)
+                ips.append(0)
+                names.append(0)
+            if conns[i] is None:
+                break
+    else:
+        conns.append(0)
+        ips.append(0)
+        names.append(0)
+
+    print("Connected to:{}\n -- with number {}".format(addr, connections))
+    conns[connections] = connection
+
+    ips[connections] = addr[0]
+
+    names[connections] = "Anonymous{}".format(connections)
+    print("Sending default name...")
+
+    start_new_thread(threaded_client, (connection, connections,))
     connections = connections + 1
