@@ -1,0 +1,6 @@
+/Server/cache/
+/Server/local_cache/
+/Server/logs/
+/Client/cache/
+/Client/settings.txt
+/Server/settings.txt

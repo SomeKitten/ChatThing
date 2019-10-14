@@ -1,0 +1,15 @@
+Client -> Server
+- '0': change guest name
+- '1': generic message
+- '2': login
+- '3': token login
+
+Server -> Client
+- '0': update chat
+- '1': save cache
+- '2': change local username
+
+
+
+63617 -- DEVPORT
+61797 -- PUBLICPORT
