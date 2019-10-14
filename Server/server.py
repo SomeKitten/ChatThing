@@ -150,42 +150,40 @@ def token_login(token, number):
 
 
 def get_data(conn, number):
-    reply = "X"
-    while reply == "X":
-        try:
-            data = conn.recv(2048)
-            reply = data.decode("utf-8")
+    try:
+        data = conn.recv(2048)
+        reply = data.decode("utf-8")
 
-            if reply == "X":
-                continue
+        if reply == "X":
+            return
 
-            if not reply.startswith("2"):
-                print("Unfiltered reply: '{}'".format(reply))
+        if not reply.startswith("2"):
+            print("Unfiltered reply: '{}'".format(reply))
 
-            if reply.startswith("0"):
-                # name change
-                name = reply[1:].strip()
-                change_name(number, name)
-            elif reply.startswith("1"):
-                # generic text
-                msg = reply[1:].strip()
-                send_msg(names[number], msg)
-            elif reply.startswith("2"):
-                # log in
-                tokens = reply[1:].split("\n")
-                login_register(tokens[0], tokens[1], number)
-            elif reply.startswith("3"):
-                print("Token login!")
-                token_login(reply[1:], number)
-            elif not data:
-                print("Disconnected")
-                return "break"
-            else:
-                print("Sending: X")
-                conn.sendall(str.encode("X"))
-        except ConnectionResetError:
+        if reply.startswith("0"):
+            # name change
+            name = reply[1:].strip()
+            change_name(number, name)
+        elif reply.startswith("1"):
+            # generic text
+            msg = reply[1:].strip()
+            send_msg(names[number], msg)
+        elif reply.startswith("2"):
+            # log in
+            tokens = reply[1:].split("\n")
+            login_register(tokens[0], tokens[1], number)
+        elif reply.startswith("3"):
+            print("Token login!")
+            token_login(reply[1:], number)
+        elif not data:
+            print("Disconnected")
             return "break"
-        return
+        else:
+            print("Sending: X")
+            conn.sendall(str.encode("X"))
+    except ConnectionResetError:
+        return "break"
+    return
 
 
 def threaded_client(conn, number):
